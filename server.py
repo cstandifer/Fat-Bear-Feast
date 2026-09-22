@@ -61,6 +61,7 @@ CPU_LEVELS = {
 # How long each computer bear takes to react to "GO!" (seconds, picked at random in this range),
 # roughly a person's reaction time plus the moment their tap takes to reach this server
 CPU_START = {"easy": (0.6, 0.9), "normal": (0.4, 0.65), "hard": (0.3, 0.45)}
+AWAY_SECS = 10   # a player whose page stays hidden this long gives up their seat (or their bear, mid-round)
 SILENT_SECS = 8  # a page we haven't heard from in this long is treated as gone (pages check in every 2s)
 END_PAUSE = 1.0  # seconds the board stays up after the last marble is eaten
 OVER_SECS = 6  # how long the results show before everyone returns to the waiting room
@@ -114,6 +115,7 @@ class Client:
         self.token = None
         self.name = ""
         self.visible = True               # is the page on screen (not a locked phone or background tab)?
+        self.hidden_since = None          # when the page was hidden, if it is
         self.last_seen = time.monotonic() # last time we heard anything from this page
 
     def send(self, obj):
@@ -171,10 +173,29 @@ class Game:
         return any(c.token == token and c.visible for c in self.clients)
 
     def seat_waiting(self):
-        """Give a bear to everyone who arrived while a round was on."""
+        """Give a bear to everyone who arrived while a round was on (and is actually looking at the page)."""
         for c in self.clients:
-            if c.token and self.seat_of(c.token) < 0 and None in self.seats:
+            if c.token and c.visible and self.seat_of(c.token) < 0 and None in self.seats:
                 self.seats[self.seats.index(None)] = {"kind": "human", "token": c.token, "name": c.name, "online": True}
+
+    def remove_away(self, now):
+        """Players who've been away too long lose their seat in the waiting room,
+        or hand their bear to the computer during a round."""
+        changed = False
+        for i, s in enumerate(self.seats):
+            if not s or s["kind"] != "human" or self.token_visible(s["token"]):
+                continue
+            mine = [c for c in self.clients if c.token == s["token"]]
+            if not mine or any(c.hidden_since is None or now - c.hidden_since < AWAY_SECS for c in mine):
+                continue
+            if self.phase == "lobby":
+                self.seats[i] = None
+                changed = True
+            elif s["online"]:
+                s["online"] = False
+                changed = True
+        if changed:
+            self.broadcast_lobby()
 
     def seat_of(self, token):
         for i, s in enumerate(self.seats):
@@ -454,6 +475,7 @@ class Game:
         for c in list(self.clients):
             if now - c.last_seen > SILENT_SECS:
                 c.writer.transport.abort()  # its read loop then ends and frees the seat
+        self.remove_away(now)
         if self.phase == "over" and now - self.over_at >= OVER_SECS:
             self.to_lobby()
         if self.phase == "playing":
@@ -482,6 +504,14 @@ class Game:
             leader_before = self.leader_token()
             was = c.visible
             c.visible = bool(msg.get("visible"))
+            c.hidden_since = None if c.visible else (c.hidden_since or now)
+            if c.visible and c.token:
+                i = self.seat_of(c.token)
+                if i >= 0:
+                    self.seats[i]["online"] = True       # back in time: take your bear back from the computer
+                elif self.phase == "lobby" and None in self.seats:
+                    self.seats[self.seats.index(None)] = {"kind": "human", "token": c.token, "name": c.name, "online": True}
+                    was = not c.visible                  # make sure everyone hears about the new seat
             if was != c.visible or leader_before != self.leader_token():
                 self.broadcast_lobby()
             return
