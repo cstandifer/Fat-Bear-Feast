@@ -1,0 +1,8 @@
+# Render deploy settings: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: fat-bear-feast
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 server.py

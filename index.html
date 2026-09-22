@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Fat Bear Feast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #EDF0E8;    /* pale sage */
+    --surface: #FFFFFF;
+    --sunken: #E4E9DE;    /* track behind segmented controls */
+    --line: #D8DED1;
+    --ink: #1C2620;       /* deep forest */
+    --muted: #66705F;
+    --p0: #2F2A26; --p0d: #110E0C;   /* black bear: charcoal */
+    --p1: #8B5E3C; --p1d: #5A3920;   /* grizzly: brown */
+    --p2: #5E8C3A; --p2d: #3E6224;   /* panda: bamboo green */
+    --p3: #4F87A0; --p3d: #305F77;   /* polar bear: glacier blue */
+    --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --shadow: 0 1px 2px rgba(28,38,32,.06), 0 8px 24px rgba(28,38,32,.08);
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--body);
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  button { font-family: inherit; }
+  .app {
+    height: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .logo { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -.02em; line-height: 1; }
+  .logo span { color: var(--p1); }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-weight: 600; font-size: 13px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); padding: 6px 12px; border-radius: 999px;
+    white-space: nowrap; font-variant-numeric: tabular-nums;
+  }
+  .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--p2); }
+  .status.off::before { background: #C0392B; }
+  .stage { flex: 1; min-height: 0; display: grid; place-items: center; }
+  #board { display: block; border-radius: 24px; box-shadow: var(--shadow); touch-action: none; }
+  #board.bump { animation: bump .35s ease-out; }
+  @keyframes bump { 20% { transform: translate(-6px, 3px) rotate(-1deg); } 45% { transform: translate(5px, -2px) rotate(.8deg); } 70% { transform: translate(-2px, 1px); } }
+  /* scoreboard: one card, a column per bear */
+  .scores {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+  }
+  .scores:empty { display: none; }
+  .score {
+    display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "face who pts";
+    align-items: center; column-gap: 10px; padding: 10px 14px; min-width: 0;
+  }
+  .score + .score { border-left: 1px solid var(--line); }
+  .score.me { background: color-mix(in srgb, var(--c) 9%, white); }
+  .score .face { grid-area: face; width: 30px; height: 30px; line-height: 0; }
+  .score .face svg { width: 100%; height: 100%; }
+  .score .who { grid-area: who; min-width: 0; line-height: 1.2; }
+  .score .who b, .score .who small {
+    display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .score .who b { font-weight: 600; font-size: 14px; }
+  .score .who small { font-size: 12px; color: var(--muted); }
+  .score .pts { grid-area: pts; font: 800 24px var(--display); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .score.lead .pts { color: var(--c); }
+  @media (max-width: 560px) {
+    .score {
+      grid-template-columns: auto 1fr; grid-template-areas: "face pts" "who who";
+      row-gap: 4px; column-gap: 6px; padding: 8px 10px;
+    }
+    .score .face { width: 24px; height: 24px; }
+    .score .pts { font-size: 20px; text-align: right; }
+    .score .who b { font-size: 12px; }
+    .score .who small { display: none; }
+  }
+  #chomp {
+    height: 76px; border: 0; border-radius: 20px; cursor: pointer;
+    font: 800 30px var(--display); letter-spacing: -.01em; color: #fff;
+    background: var(--c, var(--ink));
+    box-shadow: 0 6px 20px -8px var(--c, var(--ink));
+    transition: transform .08s ease, filter .08s ease;
+  }
+  #chomp:active, #chomp.hit { transform: scale(.97); filter: brightness(.88); }
+  #chomp:disabled { opacity: .35; cursor: default; box-shadow: none; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .hint { text-align: center; font-size: 13px; color: var(--muted); margin: -4px 0 0; }
+  .link-btn {
+    align-self: center; border: 0; background: none; padding: 4px 8px; cursor: pointer;
+    font: 600 14px var(--body); color: var(--ink); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+  .eyebrow b { color: var(--ink); letter-spacing: .12em; }
+
+  /* overlays */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(28,38,32,.35);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: grid; place-items: center;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+    overflow-y: auto; z-index: 5;
+  }
+  .panel {
+    width: 100%; max-width: 480px; background: var(--surface); border-radius: 24px;
+    padding: 24px 22px; box-shadow: 0 24px 60px rgba(28,38,32,.22);
+    display: flex; flex-direction: column; gap: 20px; user-select: text; -webkit-user-select: text;
+  }
+  .panel h1 { font-family: var(--display); font-weight: 800; font-size: 34px; letter-spacing: -.03em; margin: 0; line-height: 1; text-wrap: balance; }
+  .panel h1 span { color: var(--p1); }
+  .panel h2 { font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -.02em; margin: 0; line-height: 1.1; text-wrap: balance; }
+  .lede { margin: -10px 0 0; color: var(--muted); line-height: 1.5; font-size: 15px; }
+  .label { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .join { display: flex; gap: 14px; align-items: center; background: var(--ground); border-radius: 16px; padding: 12px; }
+  .join .url { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; font-size: 14px; word-break: break-all; }
+  .join small { display: block; color: var(--muted); margin-bottom: 4px; font-size: 13px; }
+  #qr { flex: none; background: #fff; padding: 6px; border-radius: 10px; line-height: 0; }
+  #qr:empty { display: none; }
+  #qr img, #qr canvas { width: 88px; height: 88px; }
+  .copy {
+    margin-top: 8px; font: 600 13px var(--body); border: 1px solid var(--line); background: var(--surface);
+    color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  }
+  input[type=text] {
+    width: 100%; font: 500 17px var(--body); padding: 12px 14px; border-radius: 12px;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    transition: border-color .15s, box-shadow .15s;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px rgba(28,38,32,.1); }
+  .seats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seat {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; text-align: left;
+    border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+    font: 600 15px var(--body); min-height: 62px; transition: border-color .15s, background .15s;
+  }
+  .seat:not([disabled]):hover { border-color: var(--c); }
+  .seat[disabled] { cursor: default; background: var(--ground); border-color: transparent; }
+  .seat.mine { border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 10%, white); padding: 9px 11px; }
+  .seat .face { flex: none; width: 40px; height: 40px; line-height: 0; }
+  .seat small { display: block; font-weight: 400; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--sunken); border-radius: 12px; }
+  .seg button {
+    border: 0; background: transparent; font: 600 14px var(--body); padding: 7px 14px; border-radius: 9px;
+    cursor: pointer; color: var(--muted); font-variant-numeric: tabular-nums; transition: background .15s, color .15s;
+  }
+  .seg button[aria-pressed=true] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(28,38,32,.15); }
+  .toggle { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: 14px; cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--ink); }
+  .big {
+    border: 0; border-radius: 14px; padding: 15px 16px; cursor: pointer;
+    font: 700 17px var(--body); background: var(--ink); color: #fff;
+    transition: transform .08s ease, filter .15s ease;
+  }
+  .big:hover { filter: brightness(1.2); }
+  .big:active { transform: scale(.98); }
+  .big.alt { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .big.alt:hover { filter: none; background: var(--ground); }
+  .big:disabled { opacity: .4; cursor: default; }
+  .wait { text-align: center; color: var(--muted); font-size: 14px; margin: 0; }
+  /* Start button stays pinned to the bottom of the screen while the waiting room scrolls */
+  .actions {
+    position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom, 0px)); z-index: 1;
+    display: flex; flex-direction: column; gap: 10px;
+    margin: 0 -22px -24px; padding: 14px 22px calc(18px + env(safe-area-inset-bottom, 0px));
+    background: var(--surface); border-radius: 0 0 24px 24px; border-top: 1px solid var(--line);
+  }
+  .actions:has(> #start[hidden]) { border-top-color: transparent; }
+  .last { text-align: center; color: var(--muted); font-size: 13px; margin: -8px 0 0; }
+  .results { display: flex; flex-direction: column; gap: 6px; }
+  .results div {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px;
+    background: var(--ground); font-weight: 600; font-size: 16px;
+  }
+  .results div::before { content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+  .results div.win { background: color-mix(in srgb, var(--c) 14%, white); }
+  .results div span:first-child { flex: 1; }
+  .results div span:last-child { font: 800 22px var(--display); font-variant-numeric: tabular-nums; }
+  @media (max-width: 420px) {
+    .panel h1 { font-size: 30px; }
+    .seats { grid-template-columns: 1fr; }
+    #chomp { height: 70px; font-size: 28px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">Fat Bear <span>Feast</span></div>
+    <div class="status" id="status">Connecting…</div>
+  </header>
+  <div class="stage" id="stage"><canvas id="board" aria-label="Game board"></canvas></div>
+  <div class="scores" id="scores"></div>
+  <button id="chomp" disabled>Chomp</button>
+  <p class="hint" id="hint">Tap the button, the board, or press Space to chomp.</p>
+  <button class="link-btn" id="newTable2" type="button" hidden>Start your own table instead</button>
+</div>
+
+<div class="overlay" id="lobby" hidden>
+  <div class="panel">
+    <div>
+      <p class="eyebrow" id="tableCode" hidden>Table <b></b></p>
+      <h1>Fat Bear <span>Feast</span></h1>
+    </div>
+    <p class="lede">Four hungry bears, one river full of salmon. Lunge at the right moment. Whoever eats the most is the fattest bear of the week.</p>
+    <div class="join">
+      <div id="qr"></div>
+      <div>
+        <small id="shareLabel">Share this link:</small>
+        <div class="url" id="url">…</div>
+        <button class="copy" id="copy" type="button">Copy link</button>
+      </div>
+    </div>
+    <div>
+      <div class="label"><label for="name">Your name</label></div>
+      <input type="text" id="name" maxlength="16" placeholder="e.g. Salmon Sam" autocomplete="off">
+    </div>
+    <div>
+      <div class="label">Pick your bear</div>
+      <div class="seats" id="seats"></div>
+    </div>
+    <div id="hostControls" hidden>
+      <div class="label">Salmon</div>
+      <div class="row" style="justify-content: space-between">
+        <div class="seg" id="marbleSeg" role="group" aria-label="Number of salmon"></div>
+        <label class="toggle"><input type="checkbox" id="cpu"> CPUs fill empty seats</label>
+      </div>
+      <div id="levelWrap" style="margin-top:14px">
+        <div class="label">Computer bears</div>
+        <div class="seg" id="levelSeg" role="group" aria-label="Computer difficulty"></div>
+      </div>
+    </div>
+    <p class="last" id="last" hidden></p>
+    <div class="actions">
+      <button class="big" id="start" hidden>Start game</button>
+      <button class="big" id="newTable" type="button" hidden>Start a new table</button>
+      <p class="wait" id="wait"></p>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="panel">
+    <h2 id="winner">Winner!</h2>
+    <div class="results" id="results"></div>
+    <div class="row" style="gap:12px">
+      <button class="big alt" id="toLobby" style="flex:1">Go to the waiting room</button>
+    </div>
+    <p class="wait" id="overWait"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const css = getComputedStyle(document.documentElement);
+  const COL = [0,1,2,3].map(i => css.getPropertyValue(`--p${i}`).trim());
+  const DK  = [0,1,2,3].map(i => css.getPropertyValue(`--p${i}d`).trim());
+  const BEARS = [
+    { name: 'Black bear', fur: '#2E2824', edge: '#110E0C', muzzle: '#B8905F', ear: '#453A33', inner: '#6B5A4C' },
+    { name: 'Grizzly',    fur: '#8B5E3C', edge: '#4A2F1C', muzzle: '#C9A077', ear: '#6A4529', inner: '#B98A62', hump: '#A57A55' },
+    { name: 'Panda',      fur: '#F3F0E8', edge: '#1E1B19', muzzle: '#FFFFFF', ear: '#1E1B19', inner: '#1E1B19', dark: '#1E1B19' },
+    { name: 'Polar bear', fur: '#EEE8DA', edge: '#9E957F', muzzle: '#F8F4EA', ear: '#DDD4C0', inner: '#C9BFA9' },
+  ];
+  const COLOR_NAME = BEARS.map(b => b.name);
+  function faceSVG(i) {
+    const b = BEARS[i], ew = 1.6;
+    const patches = b.dark
+      ? `<ellipse cx="14" cy="20" rx="4.8" ry="3.6" fill="${b.dark}" transform="rotate(-30 14 20)"/><ellipse cx="26" cy="20" rx="4.8" ry="3.6" fill="${b.dark}" transform="rotate(30 26 20)"/>`
+      : '';
+    return `<svg viewBox="0 0 40 40" width="40" height="40" aria-hidden="true">
+      <circle cx="9" cy="10" r="6.5" fill="${b.ear}" stroke="${b.edge}" stroke-width="${ew}"/>
+      <circle cx="31" cy="10" r="6.5" fill="${b.ear}" stroke="${b.edge}" stroke-width="${ew}"/>
+      <circle cx="20" cy="22" r="15" fill="${b.fur}" stroke="${b.edge}" stroke-width="${ew}"/>
+      ${patches}
+      <circle cx="14" cy="20" r="1.9" fill="#0B0908"/><circle cx="26" cy="20" r="1.9" fill="#0B0908"/>
+      <circle cx="14.6" cy="19.4" r=".7" fill="#fff"/><circle cx="26.6" cy="19.4" r=".7" fill="#fff"/>
+      <ellipse cx="20" cy="28.5" rx="7" ry="5.5" fill="${b.muzzle}"/>
+      <ellipse cx="20" cy="26.5" rx="3.1" ry="2.3" fill="#1A1614"/>
+    </svg>`;
+  }
+  const DIRS = [[0,1],[-1,0],[0,-1],[1,0]];
+  const C = 500, R = 240, BALL = 19, MOUTH_REST = R + 12, MOUTH_LIP = 44, REACH = MOUTH_REST - MOUTH_LIP + 10;
+  const VIEW = 900;                 // world units shown across the canvas (zoomed in on the bowl)
+  const BODY = VIEW / 2 - 10;       // bear body centre (from the bowl centre), peeking in from the tray edge
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+  let token = store.get('hc-token');
+  if (!token) { token = Math.random().toString(36).slice(2) + Date.now().toString(36); store.set('hc-token', token); }
+  let myName = store.get('hc-name') || '';
+
+  let ws = null, L = null, snaps = [], effects = [], fishAng = [], prevE = [0,0,0,0], openState = [false,false,false,false];
+  let qrMade = false;
+
+  // ---------- networking
+  function tableParam() { return new URLSearchParams(location.search).get('t') || ''; }
+  function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+  function connect() {
+    const sock = ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws?t=${encodeURIComponent(tableParam())}`);
+    ws.onopen = () => {
+      setStatus();
+      send({ t: 'join', token, name: myName });
+      send({ t: 'vis', visible: !document.hidden });
+    };
+    ws.onmessage = ev => {
+      const m = JSON.parse(ev.data);
+      if (m.t === 's') onState(m);
+      else if (m.t === 'lobby') onLobby(m);
+      else if (m.t === 'hello' && m.room && tableParam() !== m.room) {
+        history.replaceState(null, '', '?t=' + m.room);   // refreshing or re-connecting keeps you at this table
+      }
+    };
+    ws.onclose = () => {
+      if (ws !== sock) return;  // an old connection we already replaced
+      ws = null; setStatus();
+      setTimeout(() => { if (!ws) connect(); }, 1000);
+    };
+  }
+  // Check in every 2s so the server can tell a page that's gone quiet (a locked phone) from one that's here
+  setInterval(() => send({ t: 'ping' }), 2000);
+  // Tell the server when this page is hidden or back, so nobody is left waiting on someone who switched apps
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (!ws || ws.readyState > 1)) { ws = null; connect(); return; }
+    send({ t: 'vis', visible: !document.hidden });
+  });
+
+  // ---------- lobby / ui
+  function setStatus() {
+    const s = $('#status');
+    if (!ws || ws.readyState !== 1) { s.textContent = 'Reconnecting…'; s.classList.add('off'); return; }
+    s.classList.remove('off');
+    if (!L) { s.textContent = 'Connected'; return; }
+    if (L.phase === 'lobby') s.textContent = 'In the lobby';
+    else if (L.phase === 'over') s.textContent = 'Game over';
+    else {
+      const last = snaps[snaps.length - 1];
+      const left = last ? last.m.filter((v, i) => i % 2 === 0 && v >= 0).length : L.marbles;
+      s.textContent = `${left} salmon left`;
+    }
+  }
+
+  function seatLabel(i) {
+    const s = L.seats[i];
+    if (!s) return null;
+    if (s.kind === 'cpu') return COLOR_NAME[i];   // computer bears go by their kind: "Polar bear"
+    return s.name + (!s.online ? ' (CPU)' : s.away && i !== L.you ? ' (away)' : '');
+  }
+
+  function onLobby(m) {
+    const was = L && L.phase;
+    L = m;
+    if (m.phase === 'countdown' && was !== 'countdown') { snaps = []; effects = []; fishAng = []; }
+    // chomp button colour
+    const btn = $('#chomp');
+    if (m.you >= 0) { btn.style.setProperty('--c', COL[m.you]); btn.style.setProperty('--cd', DK[m.you]); }
+    else { btn.style.removeProperty('--c'); btn.style.removeProperty('--cd'); }
+    btn.disabled = !(m.you >= 0 && m.phase === 'playing');
+    btn.textContent = m.you >= 0 ? 'Chomp' : 'Watching';
+    $('#hint').textContent = m.you >= 0
+      ? `You're the ${COLOR_NAME[m.you].toLowerCase()} at the bottom. Tap, or press Space, to chomp.`
+      : (m.phase === 'lobby' ? 'This table is full. You can watch, or start your own table.' : 'A round is in progress. You\'ll get a bear in the waiting room when it ends, if a seat is free.');
+    $('#newTable2').hidden = m.you >= 0 || m.phase === 'lobby';
+
+    // lobby overlay
+    $('#lobby').hidden = m.phase !== 'lobby';
+    $('#over').hidden = m.phase !== 'over';
+    // Hosted online, share this page's own web address; running on a home computer,
+    // share its Wi-Fi address (localhost only works on that computer).
+    const local = /^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(location.hostname);
+    const shareUrl = local ? m.url : `${location.origin}/?t=${m.room}`;
+    $('#shareLabel').textContent = local ? 'Friends on the same Wi‑Fi open:' : 'Share this link:';
+    $('#url').textContent = shareUrl;
+    if (!qrMade && window.QRCode && shareUrl) {
+      try { new QRCode($('#qr'), { text: shareUrl, width: 192, height: 192, correctLevel: QRCode.CorrectLevel.M }); qrMade = true; } catch {}
+    }
+    const nameEl = $('#name');
+    if (document.activeElement !== nameEl) nameEl.value = myName;
+
+    const seats = $('#seats');
+    seats.innerHTML = '';
+    for (let i = 0; i < 4; i++) {
+      const s = m.seats[i];
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'seat' + (m.you === i ? ' mine' : '');
+      b.id = 'seat' + i;
+      b.style.setProperty('--c', COL[i]); b.style.setProperty('--cd', DK[i]);
+      const face = document.createElement('span'); face.className = 'face'; face.innerHTML = faceSVG(i);
+      const txt = document.createElement('span');
+      const title = document.createElement('span');
+      const sub = document.createElement('small');
+      if (m.you === i) { title.textContent = s.name; sub.textContent = 'You · tap to stand up'; }
+      else if (s) { title.textContent = s.name; sub.textContent = COLOR_NAME[i] + (s.away ? ' · away' : ''); b.disabled = true; }
+      else { title.textContent = COLOR_NAME[i]; sub.textContent = m.cpu ? 'Open · a CPU plays if empty' : 'Open · tap to sit'; }
+      txt.append(title, sub); b.append(face, txt);
+      b.onclick = () => send(m.you === i ? { t: 'stand' } : { t: 'seat', seat: i });
+      seats.append(b);
+    }
+
+    const seated = m.you >= 0;
+    $('#tableCode').hidden = !m.room;
+    $('#tableCode b').textContent = m.room || '';
+    $('#newTable').hidden = seated;
+    const humans = m.seats.filter(s => s && s.kind === 'human').length;
+    $('#hostControls').hidden = !m.leader;
+    $('#start').hidden = !m.leader;
+    $('#start').textContent = humans > 1 ? `Start game · ${humans} players`
+      : m.cpu ? 'Play vs computers' : 'Play solo';
+    $('#cpu').checked = m.cpu;
+    const seg = $('#marbleSeg');
+    seg.innerHTML = '';
+    for (const n of [12, 20, 30, 40]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = n; b.id = 'mb' + n;
+      b.setAttribute('aria-pressed', String(n === m.marbles));
+      b.onclick = () => send({ t: 'marbles', n });
+      seg.append(b);
+    }
+    const lv = $('#levelSeg');
+    lv.innerHTML = '';
+    for (const [key, label] of [['easy', 'Easy'], ['normal', 'Normal'], ['hard', 'Hard']]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label; b.id = 'lv-' + key;
+      b.setAttribute('aria-pressed', String(key === m.level));
+      b.onclick = () => send({ t: 'level', level: key });
+      lv.append(b);
+    }
+    $('#levelWrap').hidden = !m.cpu;
+    $('#wait').textContent = !seated
+      ? 'All four bears at this table are taken. Start your own table and share its link.'
+      : m.leader
+        ? (humans === 1
+            ? 'Share the link to invite friends, or start now.'
+            : 'You were here first, so you decide when to start.')
+        : `Waiting for ${m.leaderName || 'the first player'} to start the game…`;
+    const last = m.lastResult || [];
+    $('#last').hidden = !last.length;
+    $('#last').textContent = last.length
+      ? 'Last round: ' + last.map(([n, s]) => `${n} ${s}`).join(' · ')
+      : '';
+
+    // results
+    if (m.phase === 'over') {
+      const order = [0,1,2,3].filter(i => m.seats[i]).sort((a, b) => m.scores[b] - m.scores[a]);
+      const res = $('#results'); res.innerHTML = '';
+      for (const i of order) {
+        const d = document.createElement('div'); d.style.setProperty('--c', COL[i]); if (m.winners.includes(i)) d.className = 'win';
+        const a = document.createElement('span'); a.textContent = seatLabel(i) + (m.you === i ? ' (you)' : '');
+        const b = document.createElement('span'); b.textContent = m.scores[i];
+        d.append(a, b); res.append(d);
+      }
+      const w = m.winners;
+      $('#winner').textContent = w.length === 1
+        ? (w[0] === m.you ? 'You win! 🏆' : `${seatLabel(w[0])} wins!`)
+        : `It's a tie between ${w.map(seatLabel).join(' & ')}!`;
+      backAt = performance.now() + (m.backIn || 0) * 1000;
+      tickBack();
+    }
+    renderScores(m.scores);
+    setStatus();
+  }
+
+  let backAt = 0;
+  function tickBack() {
+    const s = Math.max(0, Math.ceil((backAt - performance.now()) / 1000));
+    $('#overWait').textContent = `Back to the waiting room in ${s}…`;
+  }
+  setInterval(() => { if (L && L.phase === 'over') tickBack(); }, 250);
+
+  function renderScores(sc) {
+    const el = $('#scores'); el.innerHTML = '';
+    if (!L) return;
+    const seated = [0, 1, 2, 3].filter(i => L.seats[i]);
+    // you first, then everyone else in seat order
+    seated.sort((a, b) => (b === L.you) - (a === L.you));
+    const best = Math.max(0, ...seated.map(i => sc[i]));
+    for (const i of seated) {
+      const s = L.seats[i];
+      const cell = document.createElement('div');
+      cell.className = 'score' + (L.you === i ? ' me' : '') + (best > 0 && sc[i] === best ? ' lead' : '');
+      cell.style.setProperty('--c', COL[i]);
+      const face = document.createElement('span'); face.className = 'face'; face.innerHTML = faceSVG(i);
+      const who = document.createElement('span'); who.className = 'who';
+      const name = document.createElement('b'), kind = document.createElement('small');
+      if (L.you === i) { name.textContent = 'You'; kind.textContent = COLOR_NAME[i]; }
+      else if (s.kind === 'cpu') { name.textContent = COLOR_NAME[i]; kind.textContent = 'Computer'; }
+      else { name.textContent = seatLabel(i); kind.textContent = COLOR_NAME[i]; }
+      who.append(name, kind);
+      const pts = document.createElement('span'); pts.className = 'pts'; pts.textContent = sc[i];
+      cell.append(face, who, pts);
+      el.append(cell);
+    }
+  }
+
+  $('#name').addEventListener('input', e => {
+    myName = e.target.value.slice(0, 16); store.set('hc-name', myName);
+    send({ t: 'name', name: myName });
+  });
+  $('#cpu').addEventListener('change', e => send({ t: 'cpu', on: e.target.checked }));
+  $('#start').onclick = () => { unlockAudio(); send({ t: 'start' }); };
+  const newTable = () => { location.href = '/?t=new'; };
+  $('#newTable').onclick = newTable;
+  $('#newTable2').onclick = newTable;
+  $('#toLobby').onclick = () => send({ t: 'lobby' });
+  $('#copy').onclick = () => {
+    const url = $('#url').textContent;
+    navigator.clipboard?.writeText(url).then(() => { $('#copy').textContent = 'Copied'; }, () => {
+      const r = document.createRange(); r.selectNodeContents($('#url'));
+      const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    });
+  };
+
+  // ---------- game state
+  let lastScores = '';
+  function onState(m) {
+    m.time = performance.now();
+    snaps.push(m);
+    if (snaps.length > 20) snaps.shift();
+    if (m.bump) {
+      const b = $('#board'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump');
+      sfx('bump');
+    }
+    for (const [seat, x, y] of m.eat) {
+      effects.push({ seat, x, y, t: m.time });
+      if (seat === L?.you) sfx('eat'); else sfx('far');
+    }
+    const key = m.sc.join(',');
+    if (key !== lastScores) { lastScores = key; renderScores(m.sc); }
+    setStatus();
+  }
+
+  // ---------- input
+  function chomp(e) {
+    if (e) e.preventDefault();
+    unlockAudio();
+    if (!L || L.you < 0 || L.phase !== 'playing') return;
+    send({ t: 'chomp' });
+    sfx('chomp');
+    try { navigator.vibrate?.(18); } catch {}
+    const b = $('#chomp'); b.classList.add('hit'); setTimeout(() => b.classList.remove('hit'), 90);
+  }
+  $('#chomp').addEventListener('pointerdown', chomp);
+  $('#board').addEventListener('pointerdown', chomp);
+  addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.repeat) return;
+    if (e.code === 'Space' || e.code === 'Enter' || e.code === 'ArrowUp') chomp(e);
+  });
+
+  // ---------- audio
+  let ac = null;
+  function unlockAudio() {
+    if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+    try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+  }
+  function sfx(kind) {
+    if (!ac) return;
+    const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain();
+    o.connect(g); g.connect(ac.destination);
+    if (kind === 'chomp') {
+      o.type = 'square'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(70, t + .09);
+      g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .1);
+      o.start(t); o.stop(t + .11);
+    } else if (kind === 'bump') {
+      o.type = 'triangle'; o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(45, t + .2);
+      g.gain.setValueAtTime(.18, t); g.gain.exponentialRampToValueAtTime(.001, t + .25);
+      o.start(t); o.stop(t + .26);
+    } else {
+      const loud = kind === 'eat';
+      o.type = 'sine'; o.frequency.setValueAtTime(loud ? 520 : 380, t); o.frequency.exponentialRampToValueAtTime(loud ? 1200 : 700, t + .08);
+      g.gain.setValueAtTime(loud ? .2 : .04, t); g.gain.exponentialRampToValueAtTime(.001, t + .14);
+      o.start(t); o.stop(t + .15);
+    }
+  }
+
+  // ---------- rendering
+  const cv = $('#board'), ctx = cv.getContext('2d');
+  let size = 300, dpr = 1;
+  function resize() {
+    const st = $('#stage');
+    size = Math.max(200, Math.floor(Math.min(st.clientWidth * 0.9, st.clientHeight - 12, 440)));
+    dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    cv.style.width = cv.style.height = size + 'px';
+    cv.width = cv.height = Math.round(size * dpr);
+  }
+  addEventListener('resize', resize);
+  new ResizeObserver(resize).observe($('#stage'));
+  resize();
+
+  const ang = ([x, y]) => Math.atan2(y, x);
+  const viewRot = () => (L && L.you >= 0) ? Math.PI / 2 - ang(DIRS[L.you]) : 0;
+
+  function sample() {
+    if (!snaps.length) return null;
+    const rt = performance.now() - 30;
+    let a = snaps[0], b = snaps[snaps.length - 1];
+    if (rt >= b.time) return b;
+    for (let i = snaps.length - 1; i > 0; i--) {
+      if (snaps[i - 1].time <= rt) { a = snaps[i - 1]; b = snaps[i]; break; }
+    }
+    const k = Math.max(0, Math.min(1, (rt - a.time) / ((b.time - a.time) || 1)));
+    const m = b.m.map((v, i) => (v < 0 || a.m[i] < 0) ? v : a.m[i] + (v - a.m[i]) * k);
+    const e = b.e.map((v, i) => a.e[i] + (v - a.e[i]) * k);
+    return { m, e, cd: b.cd };
+  }
+
+  function ellipse(x, y, rx, ry, fill, stroke, lw) {
+    ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 4; ctx.stroke(); }
+  }
+
+  // fixed scatter for the mossy tray texture (same on every device)
+  const SPECKS = Array.from({ length: 70 }, (_, k) => {
+    const a = Math.sin(k * 12.9898) * 43758.5453, b = Math.sin(k * 78.233) * 12543.123;
+    return [a - Math.floor(a), b - Math.floor(b), k % 3];
+  });
+  const PEBBLES = Array.from({ length: 44 }, (_, k) => {
+    const a = Math.sin(k * 3.17) * 9173.1;
+    return [k / 44 * Math.PI * 2, a - Math.floor(a)];
+  });
+
+  function drawBoard() {
+    const h = VIEW / 2;
+    ctx.fillStyle = '#4A6340';   // mossy forest floor
+    ctx.beginPath(); ctx.roundRect(C - h, C - h, VIEW, VIEW, 63); ctx.fill();
+    for (const [u, v, k] of SPECKS) {
+      ellipse(C - h + u * VIEW, C - h + v * VIEW, 5 + k * 3, 3 + k * 2, k ? 'rgba(20,35,18,.18)' : 'rgba(210,225,170,.10)');
+    }
+    // river-stone rim
+    ellipse(C, C, R + 28, R + 28, '#9C9280', '#6F6656', 5);
+    for (const [a, v] of PEBBLES) {
+      const pr = R + 14, x = C + Math.cos(a) * pr, y = C + Math.sin(a) * pr;
+      ellipse(x, y, 9 + v * 5, 7 + v * 3, v > .5 ? '#B2A994' : '#877D6B');
+    }
+    // the pool: deeper and darker in the middle, shallow and bright at the edge
+    const pool = ctx.createRadialGradient(C, C, 0, C, C, R);
+    pool.addColorStop(0, '#3D7780');
+    pool.addColorStop(0.6, '#6AA2A6');
+    pool.addColorStop(0.92, '#A6CCC7');
+    pool.addColorStop(1, '#86B2AE');
+    ellipse(C, C, R, R, pool, '#5E574A', 4);
+    ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 3;
+    for (const r of [60, 125, 190]) { ctx.beginPath(); ctx.arc(C, C, r, 0.3, Math.PI * 1.7); ctx.stroke(); }
+  }
+
+  // A spawning sockeye, seen from above: olive-green head, red body, pale belly, forked tail
+  function drawSalmon(x, y, a, phase, swim) {
+    ctx.save();
+    ctx.translate(x, y); ctx.rotate(a);
+    ellipse(3, 5, 18, 10, 'rgba(10,40,40,.25)');                 // shadow on the riverbed
+    ctx.save();                                                    // tail, wagging while it swims
+    ctx.translate(-14, 0); ctx.rotate(Math.sin(phase) * (0.15 + 0.3 * swim));
+    ctx.beginPath(); ctx.moveTo(2, 0); ctx.lineTo(-12, -10); ctx.quadraticCurveTo(-7, 0, -12, 10); ctx.closePath();
+    ctx.fillStyle = '#A92E26'; ctx.fill(); ctx.strokeStyle = '#6E1B15'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+    ctx.beginPath(); ctx.ellipse(0, 0, 18, 10.5, 0, 0, Math.PI * 2);   // body
+    const g = ctx.createLinearGradient(0, -10.5, 0, 10.5);
+    g.addColorStop(0, '#8E241D'); g.addColorStop(0.45, '#D2443A'); g.addColorStop(1, '#F29A84');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.save(); ctx.clip();                                        // green head
+    ctx.fillStyle = '#5C7A3A'; ctx.beginPath(); ctx.ellipse(16, 0, 9, 12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.beginPath(); ctx.ellipse(0, 0, 18, 10.5, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = '#6E1B15'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.strokeStyle = 'rgba(40,10,8,.45)'; ctx.lineWidth = 2;     // dorsal fin along the back
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(4, 0); ctx.stroke();
+    ellipse(12, -4.5, 2.4, 2.4, '#F8F1DC'); ellipse(12.6, -4.5, 1.2, 1.2, '#111');   // eyes
+    ellipse(12, 4.5, 2.4, 2.4, '#F8F1DC'); ellipse(12.6, 4.5, 1.2, 1.2, '#111');
+    ctx.restore();
+  }
+
+  // Draw several shapes as one silhouette: every outline first, then every fill on top,
+  // so overlapping parts merge into a single smooth shape with one continuous edge.
+  function silhouette(shapes, fill, edge, lw) {
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = edge; ctx.lineWidth = lw * 2;
+    for (const sh of shapes) { ctx.beginPath(); sh(); ctx.stroke(); }
+    ctx.fillStyle = fill;
+    for (const sh of shapes) { ctx.beginPath(); sh(); ctx.fill(); }
+  }
+  const oval = (x, y, rx, ry) => () => ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+
+  function drawBear(i, e, open, isMe, score, rot) {
+    const b = BEARS[i];
+    const phi = ang(DIRS[i]) - Math.PI / 2;
+    const tip = MOUTH_REST - e * REACH;
+    const PAW = MOUTH_REST + 74;           // front paws rest on the bank beside the head
+    ctx.save();
+    ctx.translate(C, C); ctx.rotate(phi);
+
+    // ---- body, shoulders, front legs and neck: one silhouette, lying at the water's edge
+    const leg = s => () => {
+      ctx.moveTo(s * 44, BODY - 64); ctx.lineTo(s * 104, BODY - 52);
+      ctx.lineTo(s * 114, PAW + 4); ctx.lineTo(s * 70, PAW + 4); ctx.closePath();
+    };
+    const body = [
+      oval(0, BODY + 24, 152, 104),                  // back and haunches
+      oval(0, BODY - 42, 120, 72),                   // shoulders
+      leg(-1), leg(1),
+      oval(-92, PAW, 27, 23), oval(92, PAW, 27, 23), // paws
+      () => ctx.roundRect(-40, tip + 40, 80, Math.max(10, BODY - 70 - tip), 30),  // neck
+    ];
+    silhouette(body, b.dark || b.fur, b.edge, 3);
+    if (b.dark) {                                    // panda: white back behind black shoulders and legs
+      ctx.fillStyle = b.fur; ctx.beginPath(); ctx.ellipse(0, BODY + 46, 132, 72, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(-38, tip + 40, 76, Math.max(10, BODY - 70 - tip), 28); ctx.fill();
+    }
+    if (b.hump) ellipse(0, BODY - 36, 70, 34, b.hump);           // grizzly shoulder hump
+    ellipse(-40, BODY + 10, 70, 40, 'rgba(255,255,255,.07)');     // soft light on the fur
+    for (const s of [-1, 1]) {                                    // toes and claws
+      ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = 2.5;
+      for (const t of [-9, 0, 9]) {
+        ctx.beginPath(); ctx.moveTo(s * 92 + t, PAW - 22); ctx.lineTo(s * 92 + t, PAW - 12); ctx.stroke();
+      }
+      ctx.strokeStyle = '#E9E0CC'; ctx.lineWidth = 3.5;
+      for (const t of [-14, -5, 5, 14]) {
+        ctx.beginPath(); ctx.moveTo(s * 92 + t, PAW - 22); ctx.lineTo(s * 92 + t * 1.05, PAW - 30); ctx.stroke();
+      }
+    }
+
+    // ---- head
+    ctx.save();
+    ctx.translate(0, tip); ctx.scale(0.98, 0.98); ctx.translate(0, -tip);
+    for (const s of [-1, 1]) {                                    // round ears
+      ellipse(s * 48, tip + 82, 21, 20, b.ear, b.edge, 6);
+    }
+    silhouette([
+      oval(0, tip + 46, 64, 56),                     // skull
+      oval(-36, tip + 58, 34, 30), oval(36, tip + 58, 34, 30),   // cheeks
+    ], b.fur, b.edge, 3);
+    for (const s of [-1, 1]) ellipse(s * 48, tip + 86, 9, 8, b.inner);   // inner ears
+    ellipse(-18, tip + 64, 26, 16, 'rgba(255,255,255,.08)');
+    if (b.dark) for (const s of [-1, 1]) {                       // panda eye patches
+      ctx.beginPath(); ctx.ellipse(s * 25, tip + 38, 18, 12, s * 0.55, 0, Math.PI * 2);
+      ctx.fillStyle = b.dark; ctx.fill();
+    }
+    for (const s of [-1, 1]) {                                    // eyes, looking toward the pool
+      ellipse(s * 24, tip + 37, 6.5, 6.5, '#0B0908');
+      ellipse(s * 24 + 2, tip + 35, 2.2, 2.2, '#FFFFFF');
+    }
+    if (open) {
+      ellipse(0, tip + 6, 46, 38, b.muzzle, b.edge, 4);   // lips
+      ellipse(0, tip + 4, 37, 29, '#4A1D18');              // mouth
+      ellipse(0, tip + 17, 20, 9, '#C8645A');              // tongue
+      ctx.fillStyle = '#FFFBF0';
+      for (const s of [-1, 1]) {                           // fangs
+        ctx.beginPath(); ctx.moveTo(s * 26, tip - 19); ctx.lineTo(s * 17, tip - 19); ctx.lineTo(s * 21.5, tip - 7); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(s * 26, tip + 27); ctx.lineTo(s * 17, tip + 27); ctx.lineTo(s * 21.5, tip + 16); ctx.fill();
+      }
+    } else {
+      ellipse(0, tip + 10, 36, 29, b.muzzle, b.edge, 3);  // muzzle
+      ctx.beginPath();                                      // rounded nose
+      ctx.moveTo(-12, tip - 6); ctx.quadraticCurveTo(0, tip - 12, 12, tip - 6);
+      ctx.quadraticCurveTo(10, tip + 4, 0, tip + 5); ctx.quadraticCurveTo(-10, tip + 4, -12, tip - 6);
+      ctx.fillStyle = '#1A1614'; ctx.fill();
+      ellipse(-4, tip - 6, 3.5, 2, 'rgba(255,255,255,.45)');
+      ctx.strokeStyle = '#1A1614'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, tip + 5); ctx.lineTo(0, tip + 13);
+      ctx.moveTo(-12, tip + 20); ctx.quadraticCurveTo(0, tip + 11, 12, tip + 20); ctx.stroke();
+    }
+    ctx.restore();
+
+    // ---- score badge on the bank beside the bear's shoulder, kept upright for the viewer
+    if (score !== '') {
+      ctx.translate(160, BODY - 66);
+      ctx.rotate(-(phi + rot));
+      ellipse(0, 0, 28, 28, COL[i], 'rgba(255,255,255,.9)', 3);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 32px "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(String(score), 0, 2);
+    }
+    ctx.restore();
+  }
+
+  function frame() {
+    requestAnimationFrame(frame);
+    const s = size / VIEW * dpr;
+    ctx.setTransform(s, 0, 0, s, (VIEW / 2 - C) * s, (VIEW / 2 - C) * s);
+    ctx.clearRect(C - VIEW / 2, C - VIEW / 2, VIEW, VIEW);
+    const rot = viewRot();
+    ctx.save();
+    ctx.translate(C, C); ctx.rotate(rot); ctx.translate(-C, -C);
+    drawBoard();
+
+    const inGame = L && (L.phase === 'countdown' || L.phase === 'playing' || L.phase === 'over');
+    const st = inGame ? sample() : null;
+
+    // salmon (still round underneath for bouncing and catching)
+    if (st) {
+      const n1 = snaps[snaps.length - 1], n0 = snaps[snaps.length - 2] || n1;
+      const t = performance.now();
+      for (let k = 0; k < st.m.length; k += 2) {
+        const x = st.m[k], y = st.m[k + 1];
+        if (x < 0) continue;
+        const dx = n1.m[k] - n0.m[k], dy = n1.m[k + 1] - n0.m[k + 1];
+        const j = k / 2, moving = Math.hypot(dx, dy);
+        if (fishAng[j] === undefined) fishAng[j] = Math.random() * Math.PI * 2;
+        if (moving > 0.4 && n0.m[k] >= 0) {   // turn smoothly to face where it's swimming
+          let d = Math.atan2(dy, dx) - fishAng[j];
+          d = Math.atan2(Math.sin(d), Math.cos(d));
+          fishAng[j] += d * 0.25;
+        }
+        drawSalmon(x, y, fishAng[j], t / 70 + j * 1.7, Math.min(1, moving / 6));
+      }
+    }
+    // chomp pops
+    const now = performance.now();
+    effects = effects.filter(f => now - f.t < 320);
+    for (const f of effects) {
+      const k = (now - f.t) / 320;
+      ctx.globalAlpha = 1 - k;
+      ellipse(f.x, f.y, 14 + k * 40, 14 + k * 40, null, COL[f.seat], 6);
+      ctx.globalAlpha = 1;
+    }
+    // bears
+    if (L) {
+      for (let i = 0; i < 4; i++) {
+        const seat = L.seats[i];
+        if (!seat) continue;
+        const e = st ? st.e[i] / 100 : 0;
+        if (e > prevE[i] + .001 || (e > .98)) openState[i] = true;
+        else if (e < prevE[i] - .001 || e === 0) openState[i] = false;
+        prevE[i] = e;
+        const score = st ? (snaps[snaps.length - 1]?.sc[i] ?? 0) : L.scores[i];
+        drawBear(i, e, openState[i] && e > .03, L.you === i, inGame ? score : '', rot);
+      }
+    }
+    ctx.restore();
+
+    // countdown
+    if (L && L.phase === 'countdown' && st) {
+      const n = Math.ceil(st.cd);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 170px "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif';
+      ctx.shadowColor = 'rgba(10,25,20,.45)'; ctx.shadowBlur = 30; ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(String(n || 'Go'), C, C + 6);
+      ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+    }
+
+    // last salmon eaten: a quick "Bob wins!" before the full results
+    const last = snaps[snaps.length - 1];
+    if (L && L.phase === 'playing' && last && last.m.every(v => v < 0)) {
+      const seated = [0, 1, 2, 3].filter(i => L.seats[i]);
+      const best = Math.max(...seated.map(i => last.sc[i]));
+      const w = seated.filter(i => last.sc[i] === best);
+      const text = w.length > 1 ? "It's a tie!"
+        : w[0] === L.you ? 'You win!' : `${seatLabel(w[0])} wins!`;
+      const band = w.length === 1 ? COL[w[0]] : '#1C2620';
+      ctx.fillStyle = band; ctx.globalAlpha = 0.94;
+      ctx.beginPath(); ctx.roundRect(C - VIEW / 2 + 40, C - 62, VIEW - 80, 124, 28); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      let px = 84;
+      ctx.font = `800 ${px}px "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif`;
+      const wide = ctx.measureText(text).width;
+      if (wide > VIEW - 160) { px = Math.floor(px * (VIEW - 160) / wide); ctx.font = `800 ${px}px "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif`; }
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(text, C, C + 4);
+    }
+  }
+  requestAnimationFrame(frame);
+  connect();
+})();
+</script>
+</body>
+</html>
